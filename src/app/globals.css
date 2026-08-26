@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/*
+ * ALAM Business Center admin theme. The red is the brand accent and is
+ * reserved for destructive or send-related affordances, so a red control in
+ * this interface always means "this affects delivery".
+ */
+@theme {
+  --color-alam-red: #c8102e;
+  --color-alam-red-dark: #a00d25;
+  --color-ink: #17181a;
+  --color-ink-2: #3d4045;
+  --color-muted: #6b7076;
+  --color-line: #e3e5e8;
+  --color-surface: #ffffff;
+  --color-canvas: #f6f7f8;
+  --color-ok: #1a7f4b;
+  --color-warn: #9a6700;
+  --color-warn-bg: #fff8e6;
+  --color-danger-bg: #fdf0f1;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+html, body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Tabular figures keep dashboard counts from jittering as they update. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Rendered email preview must not inherit the admin theme. */
+.email-preview {
+  background: #f4f4f4;
+  color: #333;
+  all: revert;
+}
