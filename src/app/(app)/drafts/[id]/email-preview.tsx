@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, btn } from "@/components/ui";
+import { Card, CardHeader } from "@/components/ui";
 
 /**
  * Renders the message in an iframe rather than inline.

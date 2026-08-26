@@ -9,7 +9,7 @@
  * job is created.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { db, pool } from "../src/db/index";
 import {
   users, propertyFacts, sourceDocuments, sourcePages, prospects, contacts, campaigns,

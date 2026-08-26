@@ -5,7 +5,7 @@ import {
   decideOnDraft, submitForReview, queueSend, revokeApproval,
   type ActionResult,
 } from "@/app/actions/drafts";
-import { Card, CardHeader, btn, inputClass, Badge } from "@/components/ui";
+import { Card, CardHeader, btn, inputClass } from "@/components/ui";
 import type { DraftAction, DraftStatus } from "@/lib/draft-state";
 
 interface Props {

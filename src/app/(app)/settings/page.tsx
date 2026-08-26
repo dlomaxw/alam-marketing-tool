@@ -1,6 +1,6 @@
 import { desc, isNull, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { propertyFacts, suppressions, users, roles, sendJobs } from "@/db/schema";
+import { propertyFacts, suppressions, users, roles } from "@/db/schema";
 import { guardPage } from "@/lib/auth/page-guard";
 import {
   getSendSwitch, getDailySendLimit, getTestAllowlist, getSetting, SETTING_KEYS,

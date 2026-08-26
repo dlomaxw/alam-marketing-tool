@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq, isNull, and } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  propertyFacts, settings, suppressions, prospects, contacts, sourceDocuments,
+  propertyFacts, suppressions, prospects, contacts, sourceDocuments,
 } from "@/db/schema";
 import { requirePermission, requestIp, AuthorizationError } from "@/lib/auth/session";
 import { writeAudit } from "@/lib/audit";

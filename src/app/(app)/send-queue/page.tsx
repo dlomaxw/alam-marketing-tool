@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sendJobs, emailDrafts, prospects, users } from "@/db/schema";
 import { guardPage } from "@/lib/auth/page-guard";

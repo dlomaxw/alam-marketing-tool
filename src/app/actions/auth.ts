@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/session";
 import { writeAudit } from "@/lib/audit";
 import { MFA_REQUIRED_PERMISSIONS } from "@/lib/auth/rbac";
+import { checkLoginRateLimit } from "@/lib/auth/rate-limit";
 
 export interface FormState { error?: string; notice?: string }
 
@@ -27,6 +28,22 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) return { error: "Enter your email address and password." };
+
+  const ip = await requestIp();
+  const limit = await checkLoginRateLimit(email, ip);
+  if (limit.blocked) {
+    await writeAudit({
+      actorLabel: email,
+      action: "auth.rate_limited",
+      entity: "user",
+      ip,
+      reason: limit.reason,
+    });
+    await levelTiming(started);
+    return {
+      error: `Too many failed sign-in attempts. Try again in ${limit.retryAfterMinutes} minutes.`,
+    };
+  }
 
   const [row] = await db
     .select({
@@ -51,7 +68,7 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
       action: "auth.sign_in_failed",
       entity: "user",
       entityId: row?.id ?? null,
-      ip: await requestIp(),
+      ip,
       reason: !row ? "no such user" : !ok ? "bad password" : `status ${row.status}`,
     });
     return { error: "Those sign-in details were not recognised." };
