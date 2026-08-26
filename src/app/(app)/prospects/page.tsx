@@ -46,11 +46,15 @@ export default async function ProspectsPage({
       status: prospects.status,
       sourcePage: prospects.sourcePage,
       duplicateOfId: prospects.duplicateOfId,
+      // The outer table is referenced as ${prospects}.id, not ${prospects.id}:
+      // the latter renders as a bare "id", which inside the subquery binds to
+      // contacts.id instead of the prospect's, so the correlation silently
+      // matched nothing and every address rendered blank.
       email: sql<string | null>`(
         SELECT c.email FROM ${contacts} c
-        WHERE c.prospect_id = ${prospects.id} AND c.is_primary = true
+        WHERE c.prospect_id = ${prospects}.id AND c.is_primary = true
         LIMIT 1
-      )`,
+      )`.as("primary_email"),
     })
       .from(prospects)
       .where(where)

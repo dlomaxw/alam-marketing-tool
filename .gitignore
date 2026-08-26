@@ -65,3 +65,9 @@ scripts/.parsed-sample.json
 # "Internal use only" — kept local rather than pushed to a hosted repo.
 /*.pdf
 /*.docx
+
+.vercel
+
+# Directory exports hold ~1,600 business contact addresses. Section 14 requires
+# exports to be restricted, so they stay local rather than going to a hosted repo.
+exports/

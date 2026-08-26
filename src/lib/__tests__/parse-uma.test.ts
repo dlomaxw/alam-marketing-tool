@@ -6,6 +6,8 @@ import { describe, it, expect } from "vitest";
 import { parsePage } from "../ingestion/parse-uma";
 import { repairLigatures } from "../ingestion/pdf";
 
+const BREAK = String.fromCharCode(10);
+
 const AUTOXPRESS = `AUTOXPRESS UGANDA LIMITED
 Plot 78/80, 7Th Street Industrial Area, Kampala-Uganda P. O. Box
 2075, Kampala
@@ -107,5 +109,44 @@ describe("ligature repair", () => {
       .toBe("info@youthplatformafrica.com");
     expect(repairLigatures("martin@smarƞoodsuganda.com"))
       .toBe("martin@smartfoodsuganda.com");
+  });
+});
+
+describe("company name boundaries", () => {
+  it("does not glue a capitalised street address onto the name", () => {
+    const block = [
+      "BLITZ PACKAGING LTD",
+      "PLOT 20/22, NALUKOLONGO",
+      "P.O.Box: 1234, Kampala",
+      "Email: blitzpackaging23@gmail.com",
+      "Products/Services: Packaging materials",
+    ].join(BREAK);
+    const { records } = parsePage(block, 100);
+    expect(records[0].companyName).toBe("BLITZ PACKAGING LTD");
+  });
+
+  it("drops a section heading printed above the first entry", () => {
+    const block = [
+      "BANKING & FINANCIAL SERVICES",
+      "ASCENT CAPITAL (U) LTD",
+      "Plot 21, Gardens Kololo",
+      "Tel: +256 (414) 500969",
+      "Email: r.mugera@ascent-africa.com",
+      "Products/Services: Financial Advisory Services",
+    ].join(BREAK);
+    const { records } = parsePage(block, 240);
+    expect(records[0].companyName).toBe("ASCENT CAPITAL (U) LTD");
+  });
+
+  it("keeps a genuine two-line company name intact", () => {
+    // "BIYINZIKA POULTRY" is not built from category words, so it survives.
+    const block = [
+      "BIYINZIKA POULTRY",
+      "INTERNATIONAL LIMITED",
+      "Email: info@biyinzika.co.ug",
+      "Products/Services: Poultry feed",
+    ].join(BREAK);
+    const { records } = parsePage(block, 47);
+    expect(records[0].companyName).toBe("BIYINZIKA POULTRY INTERNATIONAL LIMITED");
   });
 });

@@ -177,24 +177,80 @@ function extractPhones(s: string): string[] {
   )];
 }
 
-/** Company names are set in capitals and may wrap across two lines. */
-function extractCompanyAndAddress(preamble: string): {
+/**
+ * Address lines are frequently set in capitals too, so "capitalised" alone is
+ * not enough to tell a name from an address. Without this, entries such as
+ * "BLITZ PACKAGING LTD / PLOT 20/22, NALUKOLONGO" produced a company name with
+ * the street address glued on, which then appeared in the subject line.
+ */
+const ADDRESS_LINE =
+  /^(plot\b|p\.?\s?o\.?\s?box|po\s?box|opposite\b|near\b|along\b|\d+(st|nd|rd|th)?\s)|(\b(road|street|avenue|lane|close|crescent|drive|highway|zone|division|district|parish|village|industrial area|park|building|house|floor|suite|arcade|mall|complex)\b)/i;
+
+/** A capitalised line carrying a legal marker is definitely a company name. */
+const HAS_LEGAL_MARKER =
+  /\b(LTD|LIMITED|CO|COMPANY|PLC|INC|ENTERPRISES?|HOLDINGS?|GROUP|INDUSTRIES|INTERNATIONAL|SMC|U\)|\(U\))\b/;
+
+function isUpperLine(l: string): boolean {
+  const letters = l.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 2) return false;
+  return letters === letters.toUpperCase();
+}
+
+/**
+ * Company names are set in capitals and may wrap across two lines.
+ *
+ * `headings` carries section titles detected across the whole document
+ * ("HOTELS, HOSPITALITY", "BANKING & FINANCIAL SERVICES"). They sit above the
+ * first entry of a section and are otherwise indistinguishable from the first
+ * line of a two-line company name, so they are identified by repetition
+ * rather than by shape.
+ */
+function extractCompanyAndAddress(preamble: string, headings?: ReadonlySet<string>): {
   companyName: string | null; address: string | null;
 } {
-  const lines = preamble.split("\n").map((l) => l.trim()).filter(Boolean);
+  let lines = preamble.split("\n").map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return { companyName: null, address: null };
 
-  const isUpper = (l: string) => {
-    const letters = l.replace(/[^A-Za-z]/g, "");
-    if (letters.length < 2) return false;
-    return letters === letters.toUpperCase();
-  };
+  // Drop a leading section title such as "BANKING & FINANCIAL SERVICES" or
+  // "HOTELS,HOSPITALITY". These sit above the first entry of a section and
+  // would otherwise be read as the first line of a two-line company name,
+  // putting the category into the subject line. Stripping is deliberately
+  // conservative: the line must be built only from category words, carry no
+  // legal-entity marker of its own, and be followed by a line that is already
+  // a complete company name.
+  while (
+    lines.length > 1 &&
+    isUpperLine(lines[0]) &&
+    !HAS_LEGAL_MARKER.test(lines[0]) &&
+    isCategoryHeading(normalizeHeading(lines[0])) &&
+    isUpperLine(lines[1]) &&
+    HAS_LEGAL_MARKER.test(lines[1])
+  ) {
+    lines = lines.slice(1);
+  }
+
+  // Explicitly configured headings, when supplied, are also removed.
+  if (headings?.size) {
+    while (lines.length > 1 && headings.has(normalizeHeading(lines[0]))) {
+      lines = lines.slice(1);
+    }
+  }
+
+  const isUpper = isUpperLine;
 
   const nameParts: string[] = [];
   let i = 0;
   while (i < lines.length && isUpper(lines[i]) && nameParts.length < 3) {
+    // An address line ends the name, even in capitals — unless it also
+    // carries a legal marker, as in "PLOT 5 HOLDINGS LTD".
+    if (nameParts.length > 0 && ADDRESS_LINE.test(lines[i]) && !HAS_LEGAL_MARKER.test(lines[i])) {
+      break;
+    }
     nameParts.push(lines[i]);
     i++;
+    // Once the name carries a legal marker it is complete; anything after is
+    // address or content.
+    if (HAS_LEGAL_MARKER.test(nameParts[nameParts.length - 1])) break;
   }
 
   if (!nameParts.length) {
@@ -324,7 +380,11 @@ function trimRunOn(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-export function parsePage(pageText: string, pageNumber: number): ParsePageResult {
+export function parsePage(
+  pageText: string,
+  pageNumber: number,
+  headings?: ReadonlySet<string>,
+): ParsePageResult {
   const lines = cleanPageText(pageText);
 
   // Entries are divided by rules of underscores.
@@ -343,7 +403,7 @@ export function parsePage(pageText: string, pageNumber: number): ParsePageResult
     if (raw.length < 40) { if (raw) skipped++; continue; }
 
     const { preamble, segments } = splitByLabels(raw);
-    const { companyName, address } = extractCompanyAndAddress(preamble);
+    const { companyName, address } = extractCompanyAndAddress(preamble, headings);
 
     // An entry with no labelled fields at all is almost certainly an advert.
     if (!companyName || segments.length === 0) { skipped++; continue; }
@@ -393,14 +453,81 @@ export function parsePage(pageText: string, pageNumber: number): ParsePageResult
   return { records, skippedBlocks: skipped };
 }
 
+export function normalizeHeading(line: string): string {
+  return line.toUpperCase().replace(/[^A-Z& ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** A section heading has to repeat; a specific company name generally does not. */
+const HEADING_MIN_OCCURRENCES = 2;
+
+/**
+ * Words the directory builds its section titles from. A repeated line counts
+ * as a heading only when *every* word in it comes from this set, which is what
+ * separates "BANKING & FINANCIAL SERVICES" from "KATUMBA FURNITURE" — the
+ * latter carries a word that is not a category, so it is a company.
+ */
+const CATEGORY_WORDS = new Set([
+  "AND", "OF", "THE", "ETC",
+  "BANKING", "FINANCIAL", "FINANCE", "INSURANCE", "ASSURANCE", "CAPITAL",
+  "HOTELS", "HOSPITALITY", "TOURISM", "LEISURE", "RESTAURANTS", "CATERING",
+  "FURNITURE", "INTERIOR", "INTERIORS", "WOOD", "TIMBER",
+  "AUTOMOTIVE", "MOTOR", "MOTORS", "VEHICLES", "TRANSPORT", "LOGISTICS",
+  "CONSTRUCTION", "BUILDING", "ENGINEERING", "STEEL", "METAL", "CEMENT",
+  "MANUFACTURING", "MANUFACTURERS", "INDUSTRY", "INDUSTRIAL",
+  "AGRO", "AGRICULTURE", "AGRICULTURAL", "FOOD", "FOODS", "BEVERAGES",
+  "PACKAGING", "PRINTING", "PAPER", "PLASTICS", "PLASTIC", "RUBBER",
+  "TEXTILE", "TEXTILES", "GARMENTS", "LEATHER",
+  "PHARMACEUTICAL", "PHARMACEUTICALS", "HEALTH", "HEALTHCARE", "MEDICAL",
+  "CHEMICALS", "CHEMICAL", "ENERGY", "POWER", "OIL", "GAS", "MINING",
+  "EDUCATION", "TRAINING", "MEDIA", "ICT", "IT", "TELECOM",
+  "SERVICES", "SERVICE", "PRODUCTS", "TRADE", "TRADING", "RETAIL",
+  "WHOLESALE", "SUPERMARKETS", "ELECTRONICS", "ELECTRICAL", "APPLIANCES",
+  "SECURITY", "CONSULTANCY", "CONSULTING", "PROFESSIONAL", "GENERAL",
+  "WATER", "SANITATION", "ENVIRONMENT", "WASTE", "RECYCLING",
+]);
+
+function isCategoryHeading(normalized: string): boolean {
+  const words = normalized.split(" ").filter((w) => w && w !== "&");
+  if (words.length === 0 || words.length > 6) return false;
+  return words.every((w) => CATEGORY_WORDS.has(w));
+}
+
+/**
+ * Finds the section titles the directory prints above the first entry of each
+ * category. They are capitalised lines with no legal-entity marker that recur
+ * across the document, which is what separates "BANKING & FINANCIAL SERVICES"
+ * from "BIYINZIKA POULTRY" — the latter appears once.
+ */
+function detectSectionHeadings(pages: { page: number; text: string }[]): Set<string> {
+  const counts = new Map<string, number>();
+
+  for (const p of pages) {
+    for (const raw of p.text.split("\n")) {
+      const line = raw.trim();
+      if (!line || line.length < 4 || line.length > 60) continue;
+      if (!isUpperLine(line) || HAS_LEGAL_MARKER.test(line)) continue;
+      const key = normalizeHeading(line);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const headings = new Set<string>();
+  for (const [key, n] of counts) {
+    if (n >= HEADING_MIN_OCCURRENCES && isCategoryHeading(key)) headings.add(key);
+  }
+  return headings;
+}
+
 export function parseDocument(
   pages: { page: number; text: string }[],
 ): { records: ParsedRecord[]; skippedBlocks: number } {
+  const headings = detectSectionHeadings(pages);
   const records: ParsedRecord[] = [];
   let skippedBlocks = 0;
 
   for (const p of pages) {
-    const result = parsePage(p.text, p.page);
+    const result = parsePage(p.text, p.page, headings);
     records.push(...result.records);
     skippedBlocks += result.skippedBlocks;
   }

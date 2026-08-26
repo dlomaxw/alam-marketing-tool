@@ -135,8 +135,19 @@ for a grounded one.
 | `npm run db:generate` | Generate a migration from schema changes |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Roles, property facts, prohibited claims, settings |
+| `npm run import:directory` | Load the whole UMA directory into the database |
+| `npm run export:directory` | Write the categorized dataset to `exports/` |
 | `npm run worker` | Process the send queue once |
 | `npm run worker -- --loop` | Poll the queue continuously |
+
+`export:directory` writes three files, all gitignored because they carry
+around 1,600 business contact addresses:
+
+- `exports/uma-prospects.json` — every entry, grouped by tenant category
+- `exports/uma-prospects.csv` — flat sheet for spreadsheets or CRM import
+- `exports/uma-agent-context.json` — compact per-company payload for an agent,
+  carrying only the fields generation is permitted to use plus the page
+  reference behind them
 
 Development probes (not part of the app) live in `scripts/`:
 `probe-parse.mts` reports extraction quality over the whole directory,
