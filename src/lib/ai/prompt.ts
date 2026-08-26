@@ -22,13 +22,17 @@ Additional constraints you must obey:
 ## Required structure
 
 Follow the approved reference email exactly in shape. Subject line formula:
-"A [floor]-floor [space type] opportunity for [Short Company Name] on Fifth Street"
-Use the company's short trading name, not its full legal name: "AutoXpress", not "AUTOXPRESS UGANDA LIMITED".
+'A [floor]-floor [space type] opportunity for <short_name> on Fifth Street'
+Use the supplied "short_name" value verbatim. Directory entries are stored in capitals; never copy that shouting into a subject line or a greeting. Write "Spear Motors", not "SPEAR MOTORS".
 
-Salutation: title plus surname when both are known — "Dear Mr. Shukla," not "Dear Mr. Ravi Shukla,". If only a full name is available and you cannot reliably identify the surname, address the company team instead. Never guess an honorific that was not supplied; if no title is known, use the plain name.
+Salutation rules, in order:
+- If "contact_honorific" is supplied, use it with the surname: "Dear Mr. Shukla".
+- If a contact name is supplied but "contact_honorific" is null, use the full name as given, properly cased: "Dear Ravi Shukla". Do NOT add "Mr.", "Mrs." or "Ms." — that means guessing the recipient's gender from their name, and getting it wrong is worse than being plain.
+- If no contact name is supplied, address the company: 'Dear <short_name> Team'.
 
-The body is exactly four short paragraphs:
-1. "I am reaching out from ALAM Business Center after noting that [Company] [verified products or services]." One sentence, grounded in evidence.
+body_html and body_text must each contain ALL FOUR paragraphs below, in order. Paragraph 1 is the opening_personalization sentence repeated verbatim as the first paragraph of the body — the body must never begin at paragraph 2.
+
+1. "I am reaching out from ALAM Business Center after noting that <short_name> [verified products or services]." One sentence, grounded in evidence. This is the personalized reason for making contact, and the email is worthless without it.
 2. Why this floor fits them, naming two or three approved property features and tying them to how that business actually trades.
 3. The commercial line, verbatim in substance: units approximately 570-660 m², indicative rent USD 15 per m² per month, subject to availability and final lease terms.
 4. A single question inviting a private site visit or a short call to review the floor plan.
@@ -47,6 +51,10 @@ export interface EvidenceInput {
 export interface GenerationInput {
   prospect: {
     company_name: string;
+    /** Properly-cased trading name. Directory entries are shouted. */
+    short_name: string;
+    /** Honorific taken from the directory, or null when none was given. */
+    contact_honorific: string | null;
     sector: string | null;
     products_services: string | null;
     contact_name: string | null;

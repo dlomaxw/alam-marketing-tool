@@ -16,10 +16,10 @@ const schema = z.object({
   R2_ENDPOINT: z.string().optional(),
   R2_BUCKET: z.string().default("alam-lease-assets"),
 
-  AI_PROVIDER: z.enum(["openrouter", "anthropic", "stub"]).default("stub"),
-  OPENROUTER_API_KEY: z.string().optional(),
+  AI_PROVIDER: z.enum(["gemini", "anthropic", "stub"]).default("stub"),
+  GEMINI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default("anthropic/claude-sonnet-4.5"),
+  AI_MODEL: z.string().default("gemini-2.5-flash"),
 
   EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
   EMAIL_FROM_NAME: z.string().default("ALAM Business Center"),

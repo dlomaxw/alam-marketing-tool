@@ -151,7 +151,9 @@ const goodOutput: GenerationOutput = {
   salutation: "Dear Mr Ravi Shukla",
   opening_personalization: "The UMA directory lists AutoXpress Uganda Limited as a supplier of tyres, oil and batteries.",
   body_html: "<p>Hello</p>",
-  body_text: Array(130).fill("word").join(" ") + " https://example.com/visit",
+  // The body must open with opening_personalization; the validator enforces it.
+  body_text: "The UMA directory lists AutoXpress Uganda Limited as a supplier of tyres, oil and batteries. "
+    + Array(110).fill("word").join(" "),
   primary_cta_label: "Schedule a Private Site Visit",
   primary_cta_url: "https://example.com/visit",
   facts_used: ["unit_range", "indicative_rent"],
@@ -163,6 +165,7 @@ const goodOutput: GenerationOutput = {
 
 const context = {
   contactName: "Mr Ravi Shukla",
+  contactHonorific: "Mr.",
   wordLimit: 180,
   availableEvidenceIds: ["ev_products", "ev_sector"],
   availableFactKeys: ["unit_range", "indicative_rent", "location"],
@@ -217,6 +220,54 @@ describe("generation safety checks", () => {
       { ...context, contactName: null },
     );
     expect(r.issues.find((i) => i.code === "generic_salutation")?.severity).toBe("warning");
+  });
+
+  it("blocks a body that omits the personalized opening", () => {
+    // Gemini did this on the first real run: it returned a correct
+    // opening_personalization and then started the body at paragraph two, so
+    // the message never said why the company was being contacted.
+    const r = validateGeneration(
+      { ...goodOutput, body_text: Array(120).fill("word").join(" ") },
+      context,
+    );
+    expect(r.issues.some((i) => i.code === "missing_opening")).toBe(true);
+    expect(r.needsManualReview).toBe(true);
+  });
+
+  it("blocks an honorific the directory never supplied", () => {
+    // Gemini did exactly this on the first real run: the directory gave
+    // "RAVI SHUKLA" with no title and the model wrote "Dear Mr. Shukla",
+    // inferring gender from the name despite the prompt forbidding it.
+    const r = validateGeneration(
+      { ...goodOutput, salutation: "Dear Mr. Shukla" },
+      { ...context, contactName: "RAVI SHUKLA", contactHonorific: null },
+    );
+    expect(r.issues.some((i) => i.code === "invented_honorific")).toBe(true);
+    expect(r.needsManualReview).toBe(true);
+  });
+
+  it("allows an honorific the directory did supply", () => {
+    const r = validateGeneration(
+      { ...goodOutput, salutation: "Dear Mr. Shukla" },
+      { ...context, contactName: "Mr. Ravi Shukla", contactHonorific: "Mr." },
+    );
+    expect(r.issues.some((i) => i.code === "invented_honorific")).toBe(false);
+  });
+
+  it("flags a shouted directory name copied into the greeting", () => {
+    const r = validateGeneration(
+      { ...goodOutput, salutation: "Dear SPEAR MOTORS Team" },
+      { ...context, contactName: null, contactHonorific: null },
+    );
+    expect(r.issues.some((i) => i.code === "shouted_name")).toBe(true);
+  });
+
+  it("does not flag legitimate acronyms as shouting", () => {
+    const r = validateGeneration(
+      { ...goodOutput, subject: "A first-floor opportunity for DFCU Bank on Fifth Street" },
+      { ...context, contactName: null, contactHonorific: null },
+    );
+    expect(r.issues.some((i) => i.code === "shouted_name")).toBe(false);
   });
 
   it("blocks evidence the model was never given", () => {

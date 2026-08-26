@@ -1,7 +1,8 @@
 import { env } from "@/lib/env";
-import { appBaseUrl } from "@/lib/app-url";
 import { SYSTEM_PROMPT, buildUserMessage, type GenerationInput } from "./prompt";
-import { generationOutputSchema, type GenerationOutput } from "./schema";
+import {
+  generationOutputSchema, GEMINI_RESPONSE_SCHEMA, type GenerationOutput,
+} from "./schema";
 import { shortCompanyName, buildSalutation, buildSubject } from "@/lib/naming";
 
 export interface CompletionResult {
@@ -21,16 +22,24 @@ export class GenerationError extends Error {
 /** Low temperature: this is a grounded extraction task, not a creative one. */
 const TEMPERATURE = 0.2;
 const MAX_TOKENS = 2000;
+/**
+ * Gemini 2.5 models spend output tokens on internal reasoning before emitting
+ * anything, so the same budget that is ample for Claude truncates the JSON
+ * mid-object. Thinking is switched off — this is low-temperature generation
+ * from a supplied fact list, not a problem that benefits from deliberation —
+ * and the ceiling is raised so a long products list cannot clip the response.
+ */
+const GEMINI_MAX_TOKENS = 8000;
 const TIMEOUT_MS = 60_000;
 
 /**
  * Provider adapter. Call sites depend on this signature only, so swapping
- * OpenRouter for a direct Anthropic key is an env change, not a code change.
+ * Gemini for a direct Anthropic key is an env change, not a code change.
  */
 export async function generateEmail(input: GenerationInput): Promise<CompletionResult> {
   switch (env.AI_PROVIDER) {
-    case "openrouter":
-      return callOpenRouter(input);
+    case "gemini":
+      return callGemini(input);
     case "anthropic":
       return callAnthropic(input);
     case "stub":
@@ -70,7 +79,22 @@ function parseOutput(raw: string): GenerationOutput {
   return parsed.data;
 }
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown) {
+/**
+ * Rate limiting is routine on a free Gemini tier, and a whole batch failing
+ * because one request arrived a second early is not a useful outcome. Retries
+ * only on 429 and only a couple of times: everything else here is a decision
+ * (no credit, bad key, wrong model) that retrying cannot change.
+ */
+const RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_BACKOFF_MS = 20_000;
+
+async function postJson(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  attempt = 0,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -81,16 +105,29 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
       signal: controller.signal,
     });
     const text = await res.text();
+
+    if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : RATE_LIMIT_BACKOFF_MS * (attempt + 1);
+      console.warn(`[ai] rate limited, retrying in ${Math.round(waitMs / 1000)}s`);
+      clearTimeout(timer);
+      await new Promise((r) => setTimeout(r, waitMs));
+      return postJson(url, headers, body, attempt + 1);
+    }
+
     if (!res.ok) {
       // A bare status code sends whoever hit it to a search engine. These are
       // the failures that actually happen, so say what they mean and who can
       // fix them.
       const explained: Record<number, string> = {
-        401: "The generation provider rejected the API key. Check OPENROUTER_API_KEY or ANTHROPIC_API_KEY.",
+        400: "The generation provider rejected the request as malformed. This usually means AI_MODEL names a model the key cannot use.",
+        401: "The generation provider rejected the API key. Check GEMINI_API_KEY or ANTHROPIC_API_KEY.",
         402: "The generation provider has no credit left on this account. Top it up, or switch AI_PROVIDER to a provider that does. No draft was created and nothing was charged.",
         403: "The generation provider refused this request. The key may not have access to the configured model.",
         404: `The model "${env.AI_MODEL}" was not found at this provider. Check AI_MODEL.`,
-        429: "The generation provider is rate limiting this account. Wait and try again.",
+        429: "The generation provider is rate limiting this account, and the request still failed after retrying. Free Gemini tiers allow only a few requests per minute; wait a minute, or generate drafts in smaller batches.",
       };
       throw new GenerationError(
         explained[res.status] ??
@@ -110,42 +147,69 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
   }
 }
 
-/** OpenAI-compatible chat completions endpoint. */
-async function callOpenRouter(input: GenerationInput): Promise<CompletionResult> {
-  if (!env.OPENROUTER_API_KEY) {
-    throw new GenerationError("AI_PROVIDER is openrouter but OPENROUTER_API_KEY is not set.");
+/**
+ * Google Gemini. Uses the API's native JSON mode rather than asking for JSON
+ * in the prompt, so a malformed response is a provider fault rather than
+ * something the parser has to rescue.
+ */
+async function callGemini(input: GenerationInput): Promise<CompletionResult> {
+  if (!env.GEMINI_API_KEY) {
+    throw new GenerationError("AI_PROVIDER is gemini but GEMINI_API_KEY is not set.");
   }
 
+  const model = env.AI_MODEL;
   const data = await postJson(
-    "https://openrouter.ai/api/v1/chat/completions",
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    { "x-goog-api-key": env.GEMINI_API_KEY },
     {
-      authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "http-referer": appBaseUrl(),
-      "x-title": "ALAM Lease Outreach",
-    },
-    {
-      model: env.AI_MODEL,
-      temperature: TEMPERATURE,
-      max_tokens: MAX_TOKENS,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage(input) },
-      ],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: buildUserMessage(input) }] }],
+      generationConfig: {
+        temperature: TEMPERATURE,
+        maxOutputTokens: GEMINI_MAX_TOKENS,
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+      // The task is business correspondence grounded in a public directory.
+      // Default thresholds occasionally flag ordinary commercial language, and
+      // a blocked response here is a failed draft, not a safety win.
+      safetySettings: [
+        "HARM_CATEGORY_HARASSMENT",
+        "HARM_CATEGORY_HATE_SPEECH",
+        "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "HARM_CATEGORY_DANGEROUS_CONTENT",
+      ].map((category) => ({ category, threshold: "BLOCK_ONLY_HIGH" })),
     },
   );
 
-  const raw = data?.choices?.[0]?.message?.content;
-  if (typeof raw !== "string") {
-    throw new GenerationError("Provider response had no message content.", data);
+  const candidate = data?.candidates?.[0];
+
+  // A refusal arrives as a 200 with no content, so it has to be detected
+  // rather than assumed away.
+  if (!candidate || candidate.finishReason === "SAFETY") {
+    throw new GenerationError(
+      "The generation provider blocked this request on safety grounds. Check the prospect's directory text for anything unusual.",
+      data?.promptFeedback ?? candidate?.safetyRatings,
+    );
+  }
+  if (candidate.finishReason === "MAX_TOKENS") {
+    throw new GenerationError(
+      "The model hit its output limit before finishing the JSON. Raise GEMINI_MAX_TOKENS or shorten the campaign word limit.",
+    );
+  }
+
+  const raw = candidate?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
+  if (!raw) {
+    throw new GenerationError("Provider response had no text content.", data);
   }
 
   return {
     output: parseOutput(raw),
-    model: data?.model ?? env.AI_MODEL,
+    model: data?.modelVersion ?? model,
     usage: {
-      inputTokens: data?.usage?.prompt_tokens,
-      outputTokens: data?.usage?.completion_tokens,
+      inputTokens: data?.usageMetadata?.promptTokenCount,
+      outputTokens: data?.usageMetadata?.candidatesTokenCount,
     },
     raw,
   };

@@ -243,16 +243,16 @@ with no showroom fit; the spec says don't auto-generate for those.
 
 Ordered by what blocks going live.
 
-**1. OpenRouter has no credits.** `AI_PROVIDER=openrouter` returns **HTTP 402**.
-This is the one thing blocking real generation. Top up the account, or set
-`ANTHROPIC_API_KEY` and `AI_PROVIDER=anthropic` — the adapter already supports
-it, no code change.
+**1. Generation runs on Google Gemini** (`AI_PROVIDER=gemini`,
+`AI_MODEL=gemini-2.5-flash`). OpenRouter was removed after its account ran out
+of credit. The adapter still supports `anthropic` if you would rather use a
+Claude key; that is an environment change, not a code change.
 
 **2. Seeded admin password is weak and known.** `ChangeMe-Alam-2026` was used
 for setup and appears in the development transcript. Change it, and enrol MFA.
 
 **3. Credentials need rotating.** The Neon password, Cloudflare API token, R2
-key pair and OpenRouter key were all transmitted in plaintext during
+key pair and the Gemini key were all transmitted in plaintext during
 development.
 
 **4. No email provider configured.** `EMAIL_PROVIDER=console` logs messages and

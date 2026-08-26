@@ -12,6 +12,7 @@ import { renderEmailHtml, renderEmailText, sanitizeBodyHtml } from "@/lib/email/
 import { computeContentHash, type HashableDraft } from "@/lib/content-hash";
 import { evidenceForProspect } from "@/lib/ingestion/import";
 import { classifyProspect } from "@/lib/scoring";
+import { shortCompanyName, honorificOf } from "@/lib/naming";
 import { writeAudit } from "@/lib/audit";
 import { appBaseUrl, assertUsableForEmail } from "@/lib/app-url";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
@@ -113,6 +114,8 @@ export async function generateDraft(opts: GenerateOptions) {
   const input: GenerationInput = {
     prospect: {
       company_name: prospect.companyName,
+      short_name: shortCompanyName(prospect.companyName),
+      contact_honorific: honorificOf(contact?.fullName),
       sector: prospect.sector,
       products_services: prospect.productsServices,
       contact_name: contact?.fullName ?? null,
@@ -163,6 +166,7 @@ export async function generateDraft(opts: GenerateOptions) {
 
   const validation = validateGeneration(completion.output, {
     contactName: contact?.fullName ?? null,
+    contactHonorific: honorificOf(contact?.fullName),
     wordLimit: campaign.wordLimit,
     availableEvidenceIds: evidence.map((e) => e.id),
     availableFactKeys: facts.map((f) => f.key),

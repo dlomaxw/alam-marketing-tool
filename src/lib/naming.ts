@@ -79,6 +79,18 @@ function titleCaseCompany(name: string): string {
     .trim();
 }
 
+/**
+ * The honorific the directory actually supplied, or null. Used to tell the
+ * generator when it may write "Mr." and when doing so would mean inferring
+ * gender from a name.
+ */
+export function honorificOf(fullName: string | null | undefined): string | null {
+  const first = (fullName ?? "").trim().split(/\s+/)[0] ?? "";
+  const key = first.replace(/\./g, "").toLowerCase();
+  if (!key || !HONORIFICS.has(key)) return null;
+  return first.replace(/\.?$/, ".").replace(/^\w/, (c) => c.toUpperCase());
+}
+
 export interface SalutationParts {
   /** e.g. "Dear Mr. Shukla" or "Dear AutoXpress Team". */
   salutation: string;

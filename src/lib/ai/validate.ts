@@ -55,6 +55,8 @@ export function validateGeneration(
   output: GenerationOutput,
   context: {
     contactName: string | null;
+    /** Honorific the directory supplied, or null if it gave none. */
+    contactHonorific?: string | null;
     wordLimit: number;
     /** Evidence ids that were actually supplied to the model. */
     availableEvidenceIds: string[];
@@ -147,6 +149,58 @@ export function validateGeneration(
         ? `A verified contact name ("${context.contactName}") exists, so a generic salutation is not permitted.`
         : "Generic salutation used. Prefer addressing the company team by name.",
       excerpt: output.salutation,
+    });
+  }
+
+  /*
+   * An honorific the directory never supplied means the model inferred the
+   * recipient's gender from their name. The prompt forbids it; this is what
+   * catches it when the model does it anyway, which it did on the first real
+   * run against "RAVI SHUKLA".
+   */
+  if (context.contactName && !context.contactHonorific) {
+    const invented = /\b(mr|mrs|ms|miss|sir|madam)\.?\s/i.exec(output.salutation);
+    if (invented) {
+      issues.push({
+        code: "invented_honorific",
+        severity: "blocking",
+        message: `The greeting uses "${invented[1]}" but the directory supplied no title for ${context.contactName}. Addressing someone by an assumed gender is not acceptable; use the full name instead.`,
+        excerpt: output.salutation,
+      });
+    }
+  }
+
+  /*
+   * Directory entries are stored shouted. Copying that into a greeting or a
+   * subject line makes an otherwise careful message read like a mail merge.
+   */
+  for (const [field, value] of [["salutation", output.salutation], ["subject", output.subject]] as const) {
+    const shouted = /\b[A-Z]{2,}(?:\s+[A-Z]{2,})+\b/.exec(value.replace(/\b(ALAM|USD|DFCU|MTN|KCB|UMA|HMH)\b/g, ""));
+    if (shouted) {
+      issues.push({
+        code: "shouted_name",
+        severity: "warning",
+        message: `The ${field} contains "${shouted[0].trim()}" in capitals, copied from the directory rather than written as a trading name.`,
+        excerpt: value,
+      });
+    }
+  }
+
+  /*
+   * The body must actually open with the personalized sentence. Gemini
+   * returned it in opening_personalization but started the body at paragraph
+   * two, producing a message with no stated reason for making contact — the
+   * one thing section 7.4 requires every email to have.
+   */
+  const normalise = (t: string) =>
+    t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const opening = normalise(output.opening_personalization);
+  if (opening.length >= 20 && !normalise(output.body_text).includes(opening.slice(0, 40))) {
+    issues.push({
+      code: "missing_opening",
+      severity: "blocking",
+      message: "The body does not open with the personalized sentence, so the message never says why this company is being contacted.",
+      excerpt: output.opening_personalization,
     });
   }
 

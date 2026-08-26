@@ -71,3 +71,5 @@ scripts/.parsed-sample.json
 # Directory exports hold ~1,600 business contact addresses. Section 14 requires
 # exports to be restricted, so they stay local rather than going to a hosted repo.
 exports/
+*api*.txt
+*key*.txt

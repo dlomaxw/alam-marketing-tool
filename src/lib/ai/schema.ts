@@ -25,6 +25,47 @@ export const generationOutputSchema = z.object({
 
 export type GenerationOutput = z.infer<typeof generationOutputSchema>;
 
+/**
+ * Response schema for Gemini's structured output mode.
+ *
+ * Gemini accepts a subset of OpenAPI, not full JSON Schema: no
+ * `additionalProperties`, and a nullable field is `nullable: true` rather than
+ * a union type. Without this the model returns valid JSON of the wrong shape —
+ * it was silently omitting preview_text, body_text and the CTA fields.
+ *
+ * `propertyOrdering` matters: the model generates in this order, so the
+ * grounded fields come before the prose that depends on them.
+ */
+export const GEMINI_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    subject: { type: "STRING", description: "Subject line. No emoji, no ALL CAPS." },
+    preview_text: { type: "STRING", description: "Inbox preview line, under 160 characters." },
+    salutation: { type: "STRING", description: "e.g. 'Dear Mr. Shukla' or 'Dear AutoXpress Team'. No trailing comma." },
+    opening_personalization: { type: "STRING", description: "One sentence tying verified products/services to the property." },
+    body_html: { type: "STRING", description: "Inner body only, as <p> paragraphs. No html/head/style/table tags, no signature, no CTA button." },
+    body_text: { type: "STRING", description: "Plain-text version of the same four paragraphs. No signature, no CTA." },
+    primary_cta_label: { type: "STRING" },
+    primary_cta_url: { type: "STRING" },
+    facts_used: { type: "ARRAY", items: { type: "STRING" }, description: "Property fact keys relied on." },
+    evidence_ids: { type: "ARRAY", items: { type: "STRING" }, description: "Evidence ids supporting personalized claims." },
+    risk_flags: { type: "ARRAY", items: { type: "STRING" } },
+    needs_manual_review: { type: "BOOLEAN" },
+    manual_review_reason: { type: "STRING", nullable: true },
+  },
+  required: [
+    "subject", "preview_text", "salutation", "opening_personalization",
+    "body_html", "body_text", "primary_cta_label", "primary_cta_url",
+    "facts_used", "evidence_ids", "risk_flags", "needs_manual_review",
+  ],
+  propertyOrdering: [
+    "facts_used", "evidence_ids", "subject", "preview_text", "salutation",
+    "opening_personalization", "body_html", "body_text",
+    "primary_cta_label", "primary_cta_url",
+    "risk_flags", "needs_manual_review", "manual_review_reason",
+  ],
+} as const;
+
 /** JSON Schema handed to the model so it emits the right shape first time. */
 export const GENERATION_JSON_SCHEMA = {
   type: "object",

@@ -165,7 +165,7 @@ See `.env.example`. Notable entries:
 | `DATABASE_URL` | Postgres. Neon in this deployment. |
 | `SESSION_SECRET` | 32+ chars. `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `R2_*` | Cloudflare R2 for source PDFs and brand assets. Bucket stays private. |
-| `AI_PROVIDER` | `openrouter` \| `anthropic` \| `stub` |
+| `AI_PROVIDER` | `gemini` \| `anthropic` \| `stub` |
 | `EMAIL_PROVIDER` | `console` (logs only) \| `smtp` |
 | `GLOBAL_SEND_ENABLED` | Half of the kill switch. Keep `false` until launch approval. |
 | `TEST_SEND_ALLOWLIST` | The only addresses a TEST send may ever reach. |
