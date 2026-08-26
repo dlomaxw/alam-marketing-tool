@@ -93,6 +93,19 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {draft.manualReviewReason && (
+        /* The reason was always recorded but never shown, which left a
+           reviewer to guess why a draft was flagged. */
+        <Card className="border-amber-300 bg-[var(--color-warn-bg)] px-5 py-3">
+          <p className="text-xs font-semibold text-[var(--color-warn)]">
+            Why this needs manual review
+          </p>
+          <p className="mt-1 text-sm text-[var(--color-ink-2)]">
+            {draft.manualReviewReason}
+          </p>
+        </Card>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)_minmax(0,20rem)]">
         {/* ---------------------------------------------------------- left */}
         <div className="space-y-4">
