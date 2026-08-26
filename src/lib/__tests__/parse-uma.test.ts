@@ -104,6 +104,21 @@ describe("ligature repair", () => {
     expect(repairLigatures("Cliī")).toBe("Cliff");
   });
 
+  it("repairs the ligatures found only after a full import", () => {
+    // Each of these appeared in stored prospect text, "FiŌh" most damningly:
+    // the property's own street name, corrupted.
+    expect(repairLigatures("Ňoor")).toBe("floor");
+    expect(repairLigatures("sunŇower")).toBe("sunflower");
+    expect(repairLigatures("oĸce")).toBe("office");
+    expect(repairLigatures("traĸc")).toBe("traffic");
+    expect(repairLigatures("aŌer")).toBe("after");
+    expect(repairLigatures("FiŌh")).toBe("Fifth");
+    expect(repairLigatures("fiƫngs")).toBe("fittings");
+    expect(repairLigatures("typeseƫng")).toBe("typesetting");
+    expect(repairLigatures("cafĠ")).toBe("café");
+    expect(repairLigatures("crğme")).toBe("crème");
+  });
+
   it("repairs email addresses, which would otherwise hard-bounce", () => {
     expect(repairLigatures("info@youthplaƞormafrica.com"))
       .toBe("info@youthplatformafrica.com");

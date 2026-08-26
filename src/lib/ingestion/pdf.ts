@@ -52,8 +52,13 @@ const LIGATURES: [RegExp, string][] = [
   [/Į/g, "fi"],
   [/Ʃ/g, "tt"],
   [/ƞ/g, "tf"],   // "plaƞorm" -> "platform"
-  [/Ț/g, "ffi"],  // "eȚciency" -> "efficiency"
+  [/Ț|ĸ/g, "ffi"], // "eȚciency" -> "efficiency", "oĸce" -> "office"
   [/ī|Ī/g, "ff"], // "Cliī" -> "Cliff"
+  [/Ň/g, "fl"],   // "Ňoor" -> "floor", "sunŇower" -> "sunflower"
+  [/Ō/g, "ft"],   // "aŌer" -> "after", "FiŌh" -> "Fifth"
+  [/ƫ/g, "tti"],  // "fiƫngs" -> "fittings", "typeseƫng" -> "typesetting"
+  [/Ġ/g, "é"],    // "cafĠ" -> "café"
+  [/ğ/g, "è"],    // "crğme" -> "crème"
   [/ﬀ/g, "ff"],
   [/ﬁ/g, "fi"],
   [/ﬂ/g, "fl"],
