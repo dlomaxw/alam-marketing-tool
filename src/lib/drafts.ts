@@ -13,7 +13,7 @@ import { computeContentHash, type HashableDraft } from "@/lib/content-hash";
 import { evidenceForProspect } from "@/lib/ingestion/import";
 import { classifyProspect } from "@/lib/scoring";
 import { writeAudit } from "@/lib/audit";
-import { env } from "@/lib/env";
+import { appBaseUrl, assertUsableForEmail } from "@/lib/app-url";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /**
@@ -21,7 +21,7 @@ import { getSetting, SETTING_KEYS } from "@/lib/settings";
  * Section 6 forbids hot-linking, so this is always an absolute URL on our
  * domain pointing at a file we control.
  */
-const ALAM_LOGO_URL = () => `${env.NEXT_PUBLIC_APP_URL}/alam-logo.png`;
+const ALAM_LOGO_URL = () => `${appBaseUrl()}/alam-logo.png`;
 
 export class DraftError extends Error {
   constructor(message: string, readonly detail?: unknown) {
@@ -71,6 +71,10 @@ export async function generateDraft(opts: GenerateOptions) {
     : (await db.select().from(contacts)
         .where(and(eq(contacts.prospectId, prospect.id), eq(contacts.isPrimary, true)))
         .limit(1))[0];
+
+  // A draft is immutable once written, so an unusable base URL has to be
+  // caught before generation, not discovered in an approved email.
+  assertUsableForEmail();
 
   const facts = await loadApprovedFacts();
   if (!facts.length) {
@@ -189,7 +193,7 @@ export async function generateDraft(opts: GenerateOptions) {
     alamLogoUrl: ALAM_LOGO_URL(),
     recipientLogoUrl: recipientLogo?.url ?? null,
     propertyAddress: facts.find((f) => f.key === "location")?.value ?? "Fifth Street, Industrial Area, Kampala",
-    unsubscribeUrl: `${env.NEXT_PUBLIC_APP_URL}/opt-out`,
+    unsubscribeUrl: `${appBaseUrl()}/opt-out`,
   };
 
   const bodyHtml = renderEmailHtml(render);
@@ -293,7 +297,7 @@ async function approvedRecipientLogo(prospectId: string) {
     )).limit(1);
   if (!asset) return null;
   // Served from the application's own controlled asset route, never hot-linked.
-  return { id: asset.id, url: `${env.NEXT_PUBLIC_APP_URL}/api/assets/${asset.id}` };
+  return { id: asset.id, url: `${appBaseUrl()}/api/assets/${asset.id}` };
 }
 
 /**

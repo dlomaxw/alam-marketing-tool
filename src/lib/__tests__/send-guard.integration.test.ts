@@ -158,6 +158,19 @@ suite("send guard against a real database", () => {
       const draftIds = drafts.map((d) => d.id);
 
       if (draftIds.length) {
+        // The worker writes audit rows with actorId = null, so deleting by
+        // actor (below) misses them. Left behind, they are false
+        // "send.delivered" records in a compliance log, for jobs that no
+        // longer exist. Collect the job ids before the jobs are deleted.
+        const jobIds = (await db.select({ id: sendJobs.id })
+          .from(sendJobs).where(inArray(sendJobs.draftId, draftIds)))
+          .map((j) => j.id);
+
+        if (jobIds.length) {
+          await db.delete(auditLog).where(inArray(auditLog.entityId, jobIds));
+        }
+        await db.delete(auditLog).where(inArray(auditLog.entityId, draftIds));
+
         await db.delete(events).where(inArray(events.draftId, draftIds));
         await db.delete(sendJobs).where(inArray(sendJobs.draftId, draftIds));
         await db.delete(approvals).where(inArray(approvals.draftId, draftIds));

@@ -5,7 +5,7 @@ import { authorizeSend } from "@/lib/email/send-guard";
 import { getEmailProvider } from "@/lib/email/provider";
 import { hashesMatch } from "@/lib/content-hash";
 import { writeAudit } from "@/lib/audit";
-import { env } from "@/lib/env";
+import { appBaseUrl } from "@/lib/app-url";
 
 const WORKER_LABEL = "system:send-worker";
 
@@ -128,7 +128,7 @@ async function processJob(jobId: string): Promise<Outcome> {
       text: auth.draft.bodyText,
       headers: {
         // Section 13: an easy opt-out method, honoured by the mail client.
-        "List-Unsubscribe": `<${env.NEXT_PUBLIC_APP_URL}/opt-out?d=${auth.draft.id}>`,
+        "List-Unsubscribe": `<${appBaseUrl()}/opt-out?d=${auth.draft.id}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         "X-ALAM-Draft-Version": String(auth.draft.version),
         ...(job.isTest ? { "X-ALAM-Test": "true" } : {}),

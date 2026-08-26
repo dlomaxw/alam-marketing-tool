@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { appBaseUrl } from "@/lib/app-url";
 import { SYSTEM_PROMPT, buildUserMessage, type GenerationInput } from "./prompt";
 import { generationOutputSchema, type GenerationOutput } from "./schema";
 import { shortCompanyName, buildSalutation, buildSubject } from "@/lib/naming";
@@ -81,8 +82,19 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
     });
     const text = await res.text();
     if (!res.ok) {
+      // A bare status code sends whoever hit it to a search engine. These are
+      // the failures that actually happen, so say what they mean and who can
+      // fix them.
+      const explained: Record<number, string> = {
+        401: "The generation provider rejected the API key. Check OPENROUTER_API_KEY or ANTHROPIC_API_KEY.",
+        402: "The generation provider has no credit left on this account. Top it up, or switch AI_PROVIDER to a provider that does. No draft was created and nothing was charged.",
+        403: "The generation provider refused this request. The key may not have access to the configured model.",
+        404: `The model "${env.AI_MODEL}" was not found at this provider. Check AI_MODEL.`,
+        429: "The generation provider is rate limiting this account. Wait and try again.",
+      };
       throw new GenerationError(
-        `Generation provider returned ${res.status}.`,
+        explained[res.status] ??
+          `The generation provider returned an unexpected error (HTTP ${res.status}).`,
         text.slice(0, 500),
       );
     }
@@ -108,7 +120,7 @@ async function callOpenRouter(input: GenerationInput): Promise<CompletionResult>
     "https://openrouter.ai/api/v1/chat/completions",
     {
       authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "http-referer": env.NEXT_PUBLIC_APP_URL,
+      "http-referer": appBaseUrl(),
       "x-title": "ALAM Lease Outreach",
     },
     {
