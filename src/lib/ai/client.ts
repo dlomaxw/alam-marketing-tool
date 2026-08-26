@@ -21,27 +21,24 @@ export class GenerationError extends Error {
 
 /** Low temperature: this is a grounded extraction task, not a creative one. */
 const TEMPERATURE = 0.2;
-const MAX_TOKENS = 2000;
 /**
- * Gemini 2.5 models spend output tokens on internal reasoning before emitting
- * anything, so the same budget that is ample for Claude truncates the JSON
+ * Gemini 2.5 spends output tokens on internal reasoning before emitting
+ * anything, so a budget sized for the visible answer truncates the JSON
  * mid-object. Thinking is switched off — this is low-temperature generation
  * from a supplied fact list, not a problem that benefits from deliberation —
- * and the ceiling is raised so a long products list cannot clip the response.
+ * and the ceiling is generous so a long products list cannot clip the reply.
  */
 const GEMINI_MAX_TOKENS = 8000;
 const TIMEOUT_MS = 60_000;
 
 /**
  * Provider adapter. Call sites depend on this signature only, so swapping
- * Gemini for a direct Anthropic key is an env change, not a code change.
+ * one provider for another is a change here and nowhere else.
  */
 export async function generateEmail(input: GenerationInput): Promise<CompletionResult> {
   switch (env.AI_PROVIDER) {
     case "gemini":
       return callGemini(input);
-    case "anthropic":
-      return callAnthropic(input);
     case "stub":
       return callStub(input);
   }
@@ -123,8 +120,8 @@ async function postJson(
       // fix them.
       const explained: Record<number, string> = {
         400: "The generation provider rejected the request as malformed. This usually means AI_MODEL names a model the key cannot use.",
-        401: "The generation provider rejected the API key. Check GEMINI_API_KEY or ANTHROPIC_API_KEY.",
-        402: "The generation provider has no credit left on this account. Top it up, or switch AI_PROVIDER to a provider that does. No draft was created and nothing was charged.",
+        401: "Gemini rejected the API key. Check GEMINI_API_KEY.",
+        402: "The Gemini account has no credit left. No draft was created and nothing was charged.",
         403: "The generation provider refused this request. The key may not have access to the configured model.",
         404: `The model "${env.AI_MODEL}" was not found at this provider. Check AI_MODEL.`,
         429: "The generation provider is rate limiting this account, and the request still failed after retrying. Free Gemini tiers allow only a few requests per minute; wait a minute, or generate drafts in smaller batches.",
@@ -210,47 +207,6 @@ async function callGemini(input: GenerationInput): Promise<CompletionResult> {
     usage: {
       inputTokens: data?.usageMetadata?.promptTokenCount,
       outputTokens: data?.usageMetadata?.candidatesTokenCount,
-    },
-    raw,
-  };
-}
-
-async function callAnthropic(input: GenerationInput): Promise<CompletionResult> {
-  if (!env.ANTHROPIC_API_KEY) {
-    throw new GenerationError("AI_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.");
-  }
-
-  const data = await postJson(
-    "https://api.anthropic.com/v1/messages",
-    {
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    {
-      model: env.AI_MODEL,
-      max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-      system: SYSTEM_PROMPT,
-      messages: [
-        { role: "user", content: buildUserMessage(input) },
-        // Prefilling the opening brace keeps the reply to bare JSON.
-        { role: "assistant", content: "{" },
-      ],
-    },
-  );
-
-  const text = data?.content?.[0]?.text;
-  if (typeof text !== "string") {
-    throw new GenerationError("Provider response had no text content.", data);
-  }
-  const raw = `{${text}`;
-
-  return {
-    output: parseOutput(raw),
-    model: data?.model ?? env.AI_MODEL,
-    usage: {
-      inputTokens: data?.usage?.input_tokens,
-      outputTokens: data?.usage?.output_tokens,
     },
     raw,
   };

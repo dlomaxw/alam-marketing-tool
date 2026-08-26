@@ -1,9 +1,13 @@
+export const maxDuration = 60;
+
 import Link from "next/link";
 import { and, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { prospects, contacts } from "@/db/schema";
 import { guardPage } from "@/lib/auth/page-guard";
 import { Card, CardHeader, Empty, Badge, inputClass, btn } from "@/components/ui";
+import { batchCandidates } from "@/app/actions/batch";
+import { BatchPanel } from "./batch-panel";
 
 const SEGMENTS = [
   "vehicle_motorcycle", "appliances_electronics", "supermarket_retail",
@@ -20,7 +24,7 @@ export default async function ProspectsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; segment?: string; page?: string }>;
 }) {
-  await guardPage("prospect:read");
+  const user = await guardPage("prospect:read");
   const sp = await searchParams;
 
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
@@ -65,9 +69,13 @@ export default async function ProspectsPage({
   ]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canDraft = user.permissions.includes("draft:write");
+  const candidates = canDraft ? await batchCandidates(sp.segment) : null;
 
   return (
     <div className="space-y-4">
+      {candidates && <BatchPanel candidateCount={candidates.total} />}
+
       <Card>
         <CardHeader
           title={`Prospects (${total.toLocaleString()})`}
