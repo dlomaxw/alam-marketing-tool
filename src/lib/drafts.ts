@@ -23,6 +23,15 @@ import { getSetting, SETTING_KEYS } from "@/lib/settings";
  */
 const ALAM_LOGO_URL = () => `${appBaseUrl()}/alam-logo.png`;
 
+/** The managing agent's mark, credited in the footer. */
+const AGENT_LOGO_URL = () => `${appBaseUrl()}/bright-logo.png`;
+const AGENT_NAME = "Bright Properties";
+
+/** Approved building render used as the email hero (section 6.1). */
+const HERO_IMAGE_URL = () => `${appBaseUrl()}/building-street.jpg`;
+const HERO_ALT =
+  "Architectural render of ALAM Business Center, Fifth Street, Industrial Area, Kampala";
+
 export class DraftError extends Error {
   constructor(message: string, readonly detail?: unknown) {
     super(message);
@@ -191,6 +200,10 @@ export async function generateDraft(opts: GenerateOptions) {
       website: null,
     },
     alamLogoUrl: ALAM_LOGO_URL(),
+    agentLogoUrl: AGENT_LOGO_URL(),
+    agentName: AGENT_NAME,
+    heroImageUrl: HERO_IMAGE_URL(),
+    heroAlt: HERO_ALT,
     recipientLogoUrl: recipientLogo?.url ?? null,
     propertyAddress: facts.find((f) => f.key === "location")?.value ?? "Fifth Street, Industrial Area, Kampala",
     unsubscribeUrl: `${appBaseUrl()}/opt-out`,
@@ -221,6 +234,7 @@ export async function generateDraft(opts: GenerateOptions) {
     subject: hashable.subject,
     previewText: hashable.previewText,
     salutation: hashable.salutation,
+    bodyInnerHtml: render.bodyHtml,
     bodyHtml,
     bodyText,
     ctaLabel: hashable.ctaLabel,
@@ -307,9 +321,20 @@ async function approvedRecipientLogo(prospectId: string) {
  * trust: an approval points at a version and a hash, and both are immutable,
  * so an edit cannot retroactively change what somebody approved.
  */
+export interface DraftEdits {
+  subject?: string;
+  previewText?: string | null;
+  salutation?: string | null;
+  /** The message body only. The branded layout is re-applied, not edited. */
+  bodyInnerHtml?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  recipientEmail?: string | null;
+}
+
 export async function reviseDraft(opts: {
   draftId: string;
-  changes: Partial<Pick<HashableDraft, "subject" | "previewText" | "salutation" | "bodyHtml" | "bodyText" | "ctaLabel" | "ctaUrl" | "recipientEmail">>;
+  changes: DraftEdits;
   actorId: string;
   actorLabel: string;
   reason?: string;
@@ -321,15 +346,64 @@ export async function reviseDraft(opts: {
     throw new DraftError("This version has already been superseded. Edit the latest version instead.");
   }
 
-  const next: HashableDraft = {
+  assertUsableForEmail();
+
+  const [campaign] = await db.select().from(campaigns)
+    .where(eq(campaigns.id, current.campaignId)).limit(1);
+  const [prospect] = await db.select().from(prospects)
+    .where(eq(prospects.id, current.prospectId)).limit(1);
+  const facts = await loadApprovedFacts();
+
+  /*
+   * An edit changes the words, never the layout. The stored body_html is the
+   * complete rendered email, so editing it directly would let a reviewer
+   * delete the header, the unsubscribe link or the sender block. Only the
+   * inner body is editable; everything around it is re-applied here.
+   */
+  const innerHtml = sanitizeBodyHtml(
+    opts.changes.bodyInnerHtml ?? current.bodyInnerHtml ?? current.bodyHtml,
+  );
+
+  const recipientEmail = opts.changes.recipientEmail ?? current.recipientEmail;
+  const salutation = opts.changes.salutation ?? current.salutation;
+
+  const render = {
     subject: opts.changes.subject ?? current.subject,
     previewText: opts.changes.previewText ?? current.previewText,
-    salutation: opts.changes.salutation ?? current.salutation,
-    bodyHtml: sanitizeBodyHtml(opts.changes.bodyHtml ?? current.bodyHtml),
-    bodyText: opts.changes.bodyText ?? current.bodyText,
+    salutation: salutation ?? "",
+    bodyHtml: innerHtml,
+    bodyText: htmlToPlainText(innerHtml),
     ctaLabel: opts.changes.ctaLabel ?? current.ctaLabel,
     ctaUrl: opts.changes.ctaUrl ?? current.ctaUrl,
-    recipientEmail: opts.changes.recipientEmail ?? current.recipientEmail,
+    companyName: prospect?.companyName ?? "",
+    sender: {
+      name: campaign?.senderName ?? "",
+      email: campaign?.senderEmail ?? "",
+      phone: campaign?.senderPhone ?? null,
+      website: null,
+    },
+    alamLogoUrl: ALAM_LOGO_URL(),
+    agentLogoUrl: AGENT_LOGO_URL(),
+    agentName: AGENT_NAME,
+    heroImageUrl: HERO_IMAGE_URL(),
+    heroAlt: HERO_ALT,
+    recipientLogoUrl: current.recipientLogoAssetId
+      ? `${appBaseUrl()}/api/assets/${current.recipientLogoAssetId}`
+      : null,
+    propertyAddress: facts.find((f) => f.key === "location")?.value
+      ?? "Fifth Street, Industrial Area, Kampala",
+    unsubscribeUrl: `${appBaseUrl()}/opt-out`,
+  };
+
+  const next: HashableDraft = {
+    subject: render.subject,
+    previewText: render.previewText,
+    salutation,
+    bodyHtml: renderEmailHtml(render),
+    bodyText: renderEmailText(render),
+    ctaLabel: render.ctaLabel,
+    ctaUrl: render.ctaUrl,
+    recipientEmail,
     recipientLogoAssetId: current.recipientLogoAssetId,
   };
 
@@ -349,6 +423,7 @@ export async function reviseDraft(opts: {
     subject: next.subject,
     previewText: next.previewText,
     salutation: next.salutation,
+    bodyInnerHtml: innerHtml,
     bodyHtml: next.bodyHtml,
     bodyText: next.bodyText,
     ctaLabel: next.ctaLabel,
@@ -389,6 +464,33 @@ export async function reviseDraft(opts: {
   });
 
   return { draft: created, unchanged: false as const, approvalVoided: wasApproved };
+}
+
+/**
+ * Turns edited body HTML into the plain-text alternative.
+ *
+ * Section 6.1 requires a complete plain-text version carrying the same facts,
+ * so it is derived from the body on every edit rather than left to drift out
+ * of step with the HTML a reviewer actually changed.
+ */
+export function htmlToPlainText(html: string): string {
+  const NL = String.fromCharCode(10);
+  return html
+    .replace(/<\s*br\s*\/?\s*>/gi, NL)
+    .replace(/<\s*\/\s*(p|div|h[1-6]|li)\s*>/gi, NL + NL)
+    .replace(/<\s*li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    // Entities are decoded after tags are stripped: decoding first would turn
+    // an encoded "&lt;p&gt;" into a tag the stripper has already run past.
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, String.fromCharCode(34))
+    .replace(/&#39;/gi, String.fromCharCode(39))
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, NL + NL)
+    .trim();
 }
 
 /** Full version history for a draft thread, newest first. */

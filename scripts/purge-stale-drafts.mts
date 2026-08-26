@@ -6,7 +6,7 @@
  * generated during local development and can only be replaced by regenerating.
  * Nothing approved or sent is touched.
  */
-import { sql, inArray, eq } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { db, pool } from "../src/db/index";
 import { emailDrafts, draftEvidence, approvals, sendJobs, events, auditLog } from "../src/db/schema";
 

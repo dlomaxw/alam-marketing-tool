@@ -31,6 +31,16 @@ export interface EmailRenderInput {
   sender: { name: string; email: string; phone: string | null; website: string | null };
   /** Absolute URL on the application's own asset domain. Never hot-linked. */
   alamLogoUrl: string | null;
+  /**
+   * The managing agent's mark, shown as a footer credit. Section 6 fixes the
+   * primary sender brand as ALAM Business Center, so this never appears in the
+   * header — the recipient must be in no doubt whose property this is.
+   */
+  agentLogoUrl?: string | null;
+  agentName?: string;
+  /** Optional approved building image (section 6.1). */
+  heroImageUrl?: string | null;
+  heroAlt?: string;
   /** Only set when the asset is approved; otherwise the name renders as text. */
   recipientLogoUrl: string | null;
   propertyAddress: string;
@@ -78,6 +88,35 @@ export function renderEmailHtml(input: EmailRenderInput): string {
     ? `<img src="${esc(recipientLogoUrl)}" height="28" alt="${esc(companyName)}" style="display:block;border:0;max-height:28px;width:auto;">`
     : `<span style="font:600 14px/1.4 Arial,Helvetica,sans-serif;color:${BRAND.black};">${esc(companyName)}</span>`;
 
+  // Section 6 again: the agent is credited, not co-branded. It sits below the
+  // rule, at a smaller weight than the ALAM footer block, and says plainly
+  // what the relationship is.
+  const agentName = input.agentName ?? "Bright Properties";
+  const agentCredit = input.agentLogoUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${BRAND.border};padding-top:12px;">
+        <tr>
+          <td style="font:400 11px/1.4 Arial,Helvetica,sans-serif;color:${BRAND.muted};letter-spacing:.06em;text-transform:uppercase;padding-bottom:6px;">Leasing managed by</td>
+        </tr>
+        <tr>
+          <td><img src="${esc(input.agentLogoUrl)}" width="140" height="63" alt="${esc(agentName)}" style="display:block;border:0;width:140px;height:auto;"></td>
+        </tr>
+      </table>`
+    : `<p style="margin:12px 0 0;padding-top:12px;border-top:1px solid ${BRAND.border};font:400 12px/1.5 Arial,Helvetica,sans-serif;color:${BRAND.muted};">
+        Leasing managed by <strong style="color:${BRAND.black};">${esc(agentName)}</strong>.
+      </p>`;
+
+  /*
+   * Hero, section 6.1. Served at 2x and displayed at the container width.
+   * The alt text says "architectural render" rather than describing it as a
+   * photograph: Phase One is a development, and an image that reads as a
+   * finished building would imply something the property facts do not claim.
+   */
+  const hero = input.heroImageUrl
+    ? `<tr><td style="padding:0;">
+        <img src="${esc(input.heroImageUrl)}" width="${W}" alt="${esc(input.heroAlt ?? "Architectural render of ALAM Business Center, Fifth Street, Industrial Area, Kampala")}" style="display:block;border:0;width:100%;max-width:${W}px;height:auto;">
+      </td></tr>`
+    : "";
+
   const testBanner = isTest
     ? `<tr><td style="background:${BRAND.black};color:#FFD400;padding:10px 28px;font:700 13px/1.4 Arial,Helvetica,sans-serif;letter-spacing:.08em;">TEST MESSAGE — NOT SENT TO A PROSPECT</td></tr>`
     : "";
@@ -106,6 +145,7 @@ export function renderEmailHtml(input: EmailRenderInput): string {
 <table role="presentation" class="wrap" width="${W}" cellpadding="0" cellspacing="0" border="0" style="width:${W}px;max-width:${W}px;background:${BRAND.white};border:1px solid ${BRAND.border};">
   ${testBanner}
   <tr><td class="pad" style="padding:28px 32px 20px;border-bottom:3px solid ${BRAND.red};">${header}</td></tr>
+  ${hero}
 
   <tr><td class="pad" style="padding:22px 32px 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
@@ -147,10 +187,11 @@ export function renderEmailHtml(input: EmailRenderInput): string {
       <a href="mailto:${esc(sender.email)}" style="color:${BRAND.muted};">${esc(sender.email)}</a>
       ${sender.website ? ` &nbsp;|&nbsp; <a href="${esc(sender.website)}" style="color:${BRAND.muted};">${esc(sender.website)}</a>` : ""}
     </p>
-    <p style="margin:0;">
+    <p style="margin:0 0 14px;">
       You received this business enquiry because ${esc(companyName)} is listed in the Uganda Manufacturers Association directory.
       <a href="${esc(unsubscribeUrl)}" style="color:${BRAND.red};">Tell us not to contact you again</a>.
     </p>
+    ${agentCredit}
   </td></tr>
 </table>
 </td></tr>
@@ -183,5 +224,7 @@ export function renderEmailText(input: EmailRenderInput): string {
     "",
     `You received this business enquiry because ${companyName} is listed in the Uganda Manufacturers Association directory.`,
     `To be removed from this list: ${unsubscribeUrl}`,
+    "",
+    `Leasing managed by ${input.agentName ?? "Bright Properties"}.`,
   ].filter((l) => l !== "").join("\n");
 }

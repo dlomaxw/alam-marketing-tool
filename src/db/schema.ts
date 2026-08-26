@@ -236,6 +236,13 @@ export const emailDrafts = pgTable("email_drafts", {
   subject: text("subject").notNull(),
   previewText: text("preview_text"),
   salutation: text("salutation"),
+  /**
+   * The generated message body only: paragraphs, no branded scaffold. Kept
+   * separately from the rendered email so an edit can change the words and be
+   * re-rendered into the approved layout, rather than editing the layout.
+   */
+  bodyInnerHtml: text("body_inner_html"),
+  /** The complete rendered email. This is what is hashed and delivered. */
   bodyHtml: text("body_html").notNull(),
   bodyText: text("body_text").notNull(),
   ctaLabel: text("cta_label").notNull(),

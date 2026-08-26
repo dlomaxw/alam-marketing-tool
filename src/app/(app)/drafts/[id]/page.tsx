@@ -13,6 +13,7 @@ import { authorizeSend } from "@/lib/email/send-guard";
 import { Card, CardHeader, StatusBadge, Badge, SendStateBanner, Empty } from "@/components/ui";
 import { ReviewPanel } from "./review-panel";
 import { EmailPreview } from "./email-preview";
+import { EditPanel } from "./edit-panel";
 
 /**
  * Reviewer screen, specification section 8.2.
@@ -156,6 +157,21 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           </Card>
 
           <EmailPreview html={draft.bodyHtml} text={draft.bodyText} />
+
+          {actions.includes("edit") && (
+            <EditPanel
+              draftId={draft.id}
+              status={draft.status}
+              subject={draft.subject}
+              previewText={draft.previewText ?? ""}
+              salutation={draft.salutation ?? ""}
+              bodyInnerHtml={draft.bodyInnerHtml ?? ""}
+              ctaLabel={draft.ctaLabel}
+              ctaUrl={draft.ctaUrl}
+              recipientEmail={draft.recipientEmail ?? ""}
+              isApproved={draft.status === "approved"}
+            />
+          )}
         </div>
 
         {/* --------------------------------------------------------- right */}

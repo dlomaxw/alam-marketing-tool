@@ -9,7 +9,7 @@ import { canTransition, type DraftStatus } from "@/lib/draft-state";
 import { authorizeSend, buildIdempotencyKey } from "@/lib/email/send-guard";
 import { hashesMatch } from "@/lib/content-hash";
 import { writeAudit } from "@/lib/audit";
-import { reviseDraft, generateDraft, DraftError } from "@/lib/drafts";
+import { reviseDraft, generateDraft, DraftError, type DraftEdits } from "@/lib/drafts";
 
 export interface ActionResult {
   ok: boolean;
@@ -169,9 +169,9 @@ export async function revokeApproval(draftId: string, reason: string): Promise<A
 
 export async function editDraft(
   draftId: string,
-  changes: Record<string, string>,
+  changes: DraftEdits,
   reason?: string,
-): Promise<ActionResult> {
+): Promise<ActionResult & { draftId?: string }> {
   try {
     const user = await requirePermission("draft:write");
     const draft = await loadDraft(draftId);
@@ -192,10 +192,14 @@ export async function editDraft(
     }
 
     revalidatePath("/review");
+    revalidatePath(`/drafts/${draftId}`);
     revalidatePath(`/drafts/${result.draft.id}`);
 
     return {
       ok: true,
+      // The caller is looking at the superseded version and must be moved to
+      // the new one, or the next thing they do acts on stale content.
+      draftId: result.draft.id,
       message: result.approvalVoided
         ? `Version ${result.draft.version} created. The previous approval no longer applies and this version needs review again.`
         : `Version ${result.draft.version} created.`,
