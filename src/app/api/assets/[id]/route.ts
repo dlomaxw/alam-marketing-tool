@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { brandAssets } from "@/db/schema";
-import { getObject } from "@/lib/storage/r2";
+import { getObject } from "@/lib/storage";
 
 /**
  * Serves brand assets from the application's own domain.

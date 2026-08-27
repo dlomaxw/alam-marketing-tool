@@ -50,7 +50,9 @@ db cred.txt
 
 # Large source documents (60MB+). Uploaded through /sources at runtime instead.
 source-documents/
-storage/
+# Anchored: unanchored "storage/" also matched src/lib/storage/,
+# silently excluding the storage driver source from the repository.
+/storage/
 
 # Test / local artifacts
 /coverage

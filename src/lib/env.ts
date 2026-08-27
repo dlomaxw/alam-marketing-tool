@@ -15,6 +15,9 @@ const schema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_ENDPOINT: z.string().optional(),
   R2_BUCKET: z.string().default("alam-lease-assets"),
+  /** auto = R2 when configured, else the local filesystem. */
+  STORAGE_DRIVER: z.enum(["auto", "r2", "local"]).default("auto"),
+  LOCAL_STORAGE_DIR: z.string().default("storage"),
 
   AI_PROVIDER: z.enum(["gemini", "stub"]).default("stub"),
   GEMINI_API_KEY: z.string().optional(),

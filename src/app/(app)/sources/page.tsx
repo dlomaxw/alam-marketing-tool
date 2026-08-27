@@ -2,12 +2,13 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sourceDocuments, users } from "@/db/schema";
 import { guardPage } from "@/lib/auth/page-guard";
-import { storageConfigured } from "@/lib/storage/r2";
+import { storageStatus } from "@/lib/storage";
 import { Card, CardHeader, Empty, Badge } from "@/components/ui";
 import { UploadForm } from "./upload-form";
 
 export default async function SourcesPage() {
   await guardPage("source:upload");
+  const storage = storageStatus();
 
   const rows = await db
     .select({
@@ -27,11 +28,13 @@ export default async function SourcesPage() {
 
   return (
     <div className="space-y-4">
-      {!storageConfigured() && (
+      {storage.ready ? (
+        <p className="px-1 text-xs text-[var(--color-muted)]">
+          Storage: <span className="font-medium text-[var(--color-ink-2)]">{storage.driver}</span> — {storage.detail}
+        </p>
+      ) : (
         <Card className="border-amber-300 bg-[var(--color-warn-bg)] px-5 py-3 text-sm text-[var(--color-warn)]">
-          Object storage is not configured, so uploads will fail. Set
-          R2_ENDPOINT, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, and create the
-          bucket named in R2_BUCKET.
+          Uploads will fail: {storage.detail}
         </Card>
       )}
 

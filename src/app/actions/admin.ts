@@ -11,7 +11,7 @@ import { writeAudit } from "@/lib/audit";
 import { SETTING_KEYS, setSetting, getSendSwitch } from "@/lib/settings";
 import { cancelAllQueued } from "@/worker/send-worker";
 import { importSourceDocument } from "@/lib/ingestion/import";
-import { putObject, storageKeyFor } from "@/lib/storage/r2";
+import { putObject, storageKeyFor } from "@/lib/storage";
 import { checksumBuffer } from "@/lib/content-hash";
 import { classifyProspect, scoreProspect } from "@/lib/scoring";
 
