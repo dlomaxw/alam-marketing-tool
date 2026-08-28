@@ -6,12 +6,14 @@ import {
   getSendSwitch, getDailySendLimit, getTestAllowlist, getSetting, SETTING_KEYS,
 } from "@/lib/settings";
 import { pendingJobCount } from "@/lib/email/send-guard";
+import { emailStatus } from "@/lib/email/provider";
 import { env } from "@/lib/env";
 import { Card, CardHeader, Empty, Badge, SendStateBanner } from "@/components/ui";
 import { KillSwitch, FactRow, NumericSetting, AllowlistForm, SuppressionForm } from "./settings-forms";
 
 export default async function SettingsPage() {
   await guardPage("settings:manage");
+  const mail = emailStatus();
 
   const [send, facts, suppressionRows, userRows, limit, allowlist, minScore, threshold, pending] =
     await Promise.all([
@@ -35,6 +37,35 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-4">
       <SendStateBanner enabled={send.enabled} reason={send.reason} />
+
+      <Card>
+        <CardHeader
+          title="Email delivery"
+          subtitle="Which provider carries approved messages, and the address they leave as."
+          action={<Badge tone={mail.ready ? (mail.live ? "ok" : "neutral") : "danger"}>
+            {mail.ready ? (mail.live ? "ready" : "log only") : "not ready"}
+          </Badge>}
+        />
+        <dl className="grid gap-3 px-5 py-4 sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-[var(--color-muted)]">Provider</dt>
+            <dd className="mt-0.5 text-sm font-medium text-[var(--color-ink)]">{mail.provider}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--color-muted)]">Sends as</dt>
+            <dd className="mt-0.5 text-sm text-[var(--color-ink-2)]">{mail.sender}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--color-muted)]">Replies to</dt>
+            <dd className="mt-0.5 text-sm text-[var(--color-ink-2)]">{mail.replyTo}</dd>
+          </div>
+        </dl>
+        <p className={`border-t border-[var(--color-line)] px-5 py-3 text-sm ${
+          mail.ready ? "text-[var(--color-muted)]" : "text-[var(--color-alam-red)]"
+        }`}>
+          {mail.detail}
+        </p>
+      </Card>
 
       <Card>
         <CardHeader

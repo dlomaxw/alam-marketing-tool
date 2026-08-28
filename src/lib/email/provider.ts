@@ -50,22 +50,51 @@ const consoleProvider: EmailProvider = {
 
 let transporter: Transporter | null = null;
 
+/**
+ * The address mail is actually sent as.
+ *
+ * A hosted mailbox will only send as itself or a verified alias, and rejects
+ * or silently rewrites anything else — which would break DKIM alignment and
+ * with it the domain's authentication. The authenticated mailbox is therefore
+ * the source of truth, and EMAIL_FROM_ADDRESS is used only when it belongs to
+ * the same domain.
+ */
+export function effectiveSender(): string {
+  const configured = env.EMAIL_FROM_ADDRESS.trim().toLowerCase();
+  const mailbox = (env.SMTP_USER ?? "").trim().toLowerCase();
+  if (!mailbox) return configured;
+  if (!configured || !configured.includes("@")) return mailbox;
+
+  const sameDomain = configured.split("@")[1] === mailbox.split("@")[1];
+  return sameDomain ? configured : mailbox;
+}
+
 function smtpProvider(): EmailProvider {
-  if (!env.SMTP_HOST) {
-    throw new Error("EMAIL_PROVIDER is smtp but SMTP_HOST is not configured.");
+  const missing = [
+    !env.SMTP_HOST && "SMTP_HOST",
+    !env.SMTP_USER && "SMTP_USER",
+    !env.SMTP_PASS && "SMTP_PASS",
+  ].filter(Boolean);
+
+  if (missing.length) {
+    throw new EmailConfigurationError(
+      `EMAIL_PROVIDER is smtp but ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} not set. ` +
+      `SMTP_USER must be the full mailbox address, e.g. leasing@alambusinesscentre.com.`,
+    );
   }
+
   transporter ??= nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
-    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+    auth: { user: env.SMTP_USER!, pass: env.SMTP_PASS! },
   });
 
   return {
     name: "smtp",
     async send(message) {
       const info = await transporter!.sendMail({
-        from: { name: env.EMAIL_FROM_NAME, address: env.EMAIL_FROM_ADDRESS },
+        from: { name: env.EMAIL_FROM_NAME, address: effectiveSender() },
         to: message.to,
         replyTo: message.replyTo ?? env.EMAIL_REPLY_TO ?? env.EMAIL_FROM_ADDRESS,
         subject: message.subject,
@@ -221,5 +250,79 @@ export function getEmailProvider(): EmailProvider {
     case "resend": return resendProvider();
     case "smtp": return smtpProvider();
     default: return consoleProvider;
+  }
+}
+
+export interface EmailStatus {
+  provider: string;
+  /** True when a send would reach a real mailbox rather than the log. */
+  live: boolean;
+  ready: boolean;
+  sender: string;
+  replyTo: string;
+  detail: string;
+}
+
+/**
+ * What an administrator needs to see in Settings: which provider is live, the
+ * address mail actually leaves as, and whether it is configured well enough to
+ * send at all. Reports configuration only — it opens no connection.
+ */
+export function emailStatus(): EmailStatus {
+  const replyTo = env.EMAIL_REPLY_TO ?? env.EMAIL_FROM_ADDRESS;
+
+  switch (env.EMAIL_PROVIDER) {
+    case "smtp": {
+      const missing = [
+        !env.SMTP_HOST && "SMTP_HOST",
+        !env.SMTP_USER && "SMTP_USER",
+        !env.SMTP_PASS && "SMTP_PASS",
+      ].filter(Boolean);
+
+      return {
+        provider: "smtp",
+        live: true,
+        ready: missing.length === 0,
+        sender: effectiveSender(),
+        replyTo,
+        detail: missing.length
+          ? `Not ready: ${missing.join(", ")} not set in the environment.`
+          : `Sending through ${env.SMTP_HOST}:${env.SMTP_PORT} as ${effectiveSender()}.`,
+      };
+    }
+
+    case "resend":
+      return {
+        provider: "resend",
+        live: true,
+        ready: Boolean(env.RESEND_API_KEY),
+        sender: env.EMAIL_FROM_ADDRESS,
+        replyTo,
+        detail: env.RESEND_API_KEY
+          ? "Sending through the Resend API. The sender's domain must be verified in Resend."
+          : "Not ready: RESEND_API_KEY is not set.",
+      };
+
+    case "gmail":
+      return {
+        provider: "gmail",
+        live: true,
+        ready: gmailConfigured(),
+        sender: env.EMAIL_FROM_ADDRESS,
+        replyTo,
+        detail: gmailConfigured()
+          ? "Sending through the Gmail API as the authorized mailbox."
+          : "Not ready: run \"npm run gmail:authorize\" to obtain a refresh token.",
+      };
+
+    default:
+      return {
+        provider: "console",
+        live: false,
+        ready: true,
+        sender: env.EMAIL_FROM_ADDRESS,
+        replyTo,
+        detail: "Messages are written to the server log only. Nothing reaches an inbox.",
+      };
   }
 }

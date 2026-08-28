@@ -137,6 +137,9 @@ for a grounded one.
 | `npm run db:seed` | Roles, property facts, prohibited claims, settings |
 | `npm run import:directory` | Load the whole UMA directory into the database |
 | `npm run export:directory` | Write the categorized dataset to `exports/` |
+| `npm run mail:doctor` | Check the sending domain's SPF, DKIM and DMARC |
+| `npm run smtp:check` | Verify SMTP credentials without sending |
+| `npm run email:test` | Send one marked test to an allow-listed address |
 | `npm run worker` | Process the send queue once |
 | `npm run worker -- --loop` | Poll the queue continuously |
 
@@ -166,7 +169,8 @@ See `.env.example`. Notable entries:
 | `SESSION_SECRET` | 32+ chars. `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `R2_*` | Cloudflare R2 for source PDFs and brand assets. Bucket stays private. |
 | `AI_PROVIDER` | `gemini` \| `stub` (stub generates offline, for tests) |
-| `EMAIL_PROVIDER` | `console` (logs only) \| `smtp` |
+| `EMAIL_PROVIDER` | `smtp` (Namecheap Private Email, the configured sender) \| `resend` \| `gmail` \| `console` (logs only) |
+| `SMTP_USER` / `SMTP_PASS` | Full mailbox address and its password. Mail is sent as this mailbox. |
 | `GLOBAL_SEND_ENABLED` | Half of the kill switch. Keep `false` until launch approval. |
 | `TEST_SEND_ALLOWLIST` | The only addresses a TEST send may ever reach. |
 | `DAILY_SEND_LIMIT` | Hard ceiling the UI cannot raise. |
