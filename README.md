@@ -169,7 +169,7 @@ See `.env.example`. Notable entries:
 | `SESSION_SECRET` | 32+ chars. `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `R2_*` | Cloudflare R2 for source PDFs and brand assets. Bucket stays private. |
 | `AI_PROVIDER` | `gemini` \| `stub` (stub generates offline, for tests) |
-| `EMAIL_PROVIDER` | `smtp` (Namecheap Private Email, the configured sender) \| `resend` \| `gmail` \| `console` (logs only) |
+| `EMAIL_PROVIDER` | `smtp` (Namecheap Private Email) \| `console` (log only, sends nothing) |
 | `SMTP_USER` / `SMTP_PASS` | Full mailbox address and its password. Mail is sent as this mailbox. |
 | `GLOBAL_SEND_ENABLED` | Half of the kill switch. Keep `false` until launch approval. |
 | `TEST_SEND_ALLOWLIST` | The only addresses a TEST send may ever reach. |
