@@ -126,6 +126,9 @@ async function processJob(jobId: string): Promise<Outcome> {
       subject: auth.draft.subject,
       html: auth.draft.bodyHtml,
       text: auth.draft.bodyText,
+      // The job's own key, so a provider that deduplicates gives us a second
+      // line of defence behind the unique index on send_jobs.
+      idempotencyKey: job.idempotencyKey,
       headers: {
         // Section 13: an easy opt-out method, honoured by the mail client.
         "List-Unsubscribe": `<${appBaseUrl()}/opt-out?d=${auth.draft.id}>`,
