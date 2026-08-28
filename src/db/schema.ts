@@ -323,9 +323,18 @@ export const events = pgTable("events", {
   draftId: uuid("draft_id").references(() => emailDrafts.id),
   sendJobId: uuid("send_job_id").references(() => sendJobs.id),
   type: text("type").notNull(),
+  /**
+   * The provider's own id for this event. Webhooks are delivered at least
+   * once, so the unique index is what stops a retry suppressing an address
+   * twice or double-counting a bounce.
+   */
+  externalId: text("external_id"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("events_prospect_idx").on(t.prospectId)]);
+}, (t) => [
+  index("events_prospect_idx").on(t.prospectId),
+  uniqueIndex("events_external_id_idx").on(t.externalId),
+]);
 
 export const suppressions = pgTable("suppressions", {
   id: uuid("id").primaryKey().defaultRandom(),

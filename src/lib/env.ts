@@ -28,6 +28,7 @@ const schema = z.object({
   EMAIL_FROM_ADDRESS: z.string().default("leasing@example-not-configured.com"),
   EMAIL_REPLY_TO: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
   GMAIL_CLIENT_ID: z.string().optional(),
   GMAIL_CLIENT_SECRET: z.string().optional(),
   GMAIL_REFRESH_TOKEN: z.string().optional(),
