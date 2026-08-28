@@ -20,7 +20,8 @@
     "test:db": "vitest run src/lib/__tests__/send-guard.integration.test.ts",
     "repair:ligatures": "tsx --env-file=.env.local scripts/repair-ligatures.mts",
     "gmail:authorize": "tsx --env-file=.env.local scripts/gmail-authorize.mts",
-    "mail:doctor": "tsx --env-file=.env.local scripts/mail-doctor.mts"
+    "mail:doctor": "tsx --env-file=.env.local scripts/mail-doctor.mts",
+    "email:test": "tsx --env-file=.env.local scripts/email-test.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1118.0",
